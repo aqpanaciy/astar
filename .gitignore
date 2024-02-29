@@ -1,0 +1,8 @@
+
+.vs/**
+.easyTdd/**
+
+**/bin/**
+**/obj/**
+
+packages/**
