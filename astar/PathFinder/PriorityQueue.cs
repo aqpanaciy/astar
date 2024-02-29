@@ -17,6 +17,15 @@ namespace Perpetuum.Collections
             _comparer = comparer ?? Comparer<T>.Default;
         }
 
+        public void Clear()
+        {
+            _count = 0;
+            for (var i = 0; i < _capacity; i++)
+            {
+                _items[i] = default;
+            }
+        }
+
         public void Enqueue(T item)
         {
             if (_count >= _items.Length - 1)

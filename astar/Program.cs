@@ -83,13 +83,13 @@ namespace Astar
                 }
             }
 
+            var pathFinder = new AStarFinder(Heuristic.Manhattan);
+            pathFinder.RegisterDebugHandler(Handler);
             Point[] path = new Point[0];
             var watch = Stopwatch.StartNew();
             for (var i = 0; i < ITER; i++)
             {
-                var pathFinder = new AStarFinder(Heuristic.Manhattan, (x, y) => blocks[x, y]);
-                pathFinder.RegisterDebugHandler(Handler);
-                path = pathFinder.FindPath(start, end);
+                path = pathFinder.FindPath(start, end, (x, y) => blocks[x, y]);
             }
             watch.Stop();
 #if DEBUG
@@ -124,7 +124,7 @@ namespace Astar
                     color = Color.Blue; break;
             }
 
-            bmp.SetPixel(node.Location.X, node.Location.Y, color);
+            bmp.SetPixel(node.X, node.Y, color);
             bmp.Save($"./image_{_index++}.png", System.Drawing.Imaging.ImageFormat.Png);
         }
 

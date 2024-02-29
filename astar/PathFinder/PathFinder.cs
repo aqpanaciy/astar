@@ -7,21 +7,17 @@ namespace Perpetuum.PathFinders
 {
     public class PathFinderNode
     {
-        public Point Location { get; private set; }
+        public readonly int X;
+        public readonly int Y;
 
         public PathFinderNode(int x,int y)
         {
-            Location = new Point(x,y);
+            X = x;
+            Y = y;
         }
-
         public override string ToString()
         {
-            return string.Format((string) "Location: {0}", (object) Location);
-        }
-
-        public override int GetHashCode()
-        {
-            return (Location.Y << 16) + Location.X;
+            return string.Format($"Location: {X},{Y}");
         }
     }
 
@@ -40,18 +36,18 @@ namespace Perpetuum.PathFinders
 #endif
 
         //[CanBeNull]
-        public Point[] FindPath(Point start, Point end)
+        public Point[] FindPath(Point start, Point end, PathFinderNodePassableHandler handler)
         {
-            return FindPath(start, end, CancellationToken.None);
+            return FindPath(start, end, handler, CancellationToken.None);
         }
 
-        public Task<Point[]> FindPathAsync(Point start, Point end)
+        public Task<Point[]> FindPathAsync(Point start, Point end, PathFinderNodePassableHandler handler)
         {
-            return Task.Run(() => FindPath(start, end));
+            return Task.Run(() => FindPath(start, end, handler));
         }
 
         //[CanBeNull]
-        public abstract Point[] FindPath(Point start, Point end, CancellationToken cancellationToken);
+        public abstract Point[] FindPath(Point start, Point end, PathFinderNodePassableHandler handler, CancellationToken cancellationToken);
 
         [Conditional("DEBUG")]
         public void RegisterDebugHandler(PathFinderDebugHandler handler)

@@ -8,58 +8,58 @@ namespace Perpetuum.PathFinders
 {
     public class AStarFinder : PathFinder
     {
+        private const int WIDTH = 2048;
+        private const int HEIGHT = 2048;
 
+        private readonly bool[] closed = new bool[WIDTH * HEIGHT];
+        private readonly PriorityQueue<Node> open = new PriorityQueue<Node>(500);
         private readonly Heuristic _heuristic;
-        private readonly PathFinderNodePassableHandler _passableHandler;
 
-        public AStarFinder(Heuristic heuristic,PathFinderNodePassableHandler passableHandler)
+        public AStarFinder(Heuristic heuristic)
         {
             _heuristic = heuristic;
-            _passableHandler = passableHandler;
             Weight = 10;
         }
 
         public int Weight { get; set; }
 
-        public override Point[] FindPath(Point start, Point end,CancellationToken cancellationToken)
+        public override Point[] FindPath(Point start, Point end, PathFinderNodePassableHandler handler, CancellationToken cancellationToken)
         {
-            if (!_passableHandler(end.X, end.Y))
+            if (!handler(end.X, end.Y))
                 return new Point[0];
 
             if (start == end)
                 return EmptyPath;
 
-            var openList = new PriorityQueue<Node>(500);
-            var closedList = new Dictionary<int, bool>();
+            open.Clear();
+            for (var i = 0; i < WIDTH * HEIGHT; i++ )
+            {
+                closed[i] = false;
+            }
 
             var startNode = new Node(start.X, start.Y);
-            openList.Enqueue(startNode);
-            closedList[startNode.GetHashCode()] = true;
+            open.Enqueue(startNode);
+            closed[start.X + start.Y * WIDTH] = true;
 
             Node node;
-            while (openList.TryDequeue(out node) && !cancellationToken.IsCancellationRequested)
+            while (open.TryDequeue(out node) && !cancellationToken.IsCancellationRequested)
             {
                 if (!OnProcessNode(node))
                     break;
 
-                if (node.Location == end)
+                if (node.X == end.X && node.Y == end.Y)
                     return Backtrace(node);
 
-                foreach (var neighbor in GetNeighbors(node))
+                foreach (var neighbor in GetNeighbors(node, handler, closed))
                 {
-                    if (closedList.ContainsKey(neighbor.GetHashCode()))
-                        continue;
-
-                    closedList[neighbor.GetHashCode()] = true;
-
-                    var newG = node.g + (int)(Weight * (neighbor.Location.X - node.Location.X == 0 || neighbor.Location.Y - node.Location.Y == 0 ? 1 : SQRT2));
-                    var newH = _heuristic.Calculate(neighbor.Location.X, neighbor.Location.Y, end.X, end.Y) * Weight;
+                    var newG = node.g + (int)(Weight * (neighbor.X - node.X == 0 || neighbor.Y - node.Y == 0 ? 1 : SQRT2));
+                    var newH = _heuristic.Calculate(neighbor.X, neighbor.Y, end.X, end.Y) * Weight;
 
                     neighbor.g = newG;
                     neighbor.f = newG + newH;
                     neighbor.parent = node;
 
-                    openList.Enqueue(neighbor);
+                    open.Enqueue(neighbor);
                     OnPathFinderDebug(neighbor, PathFinderNodeType.Open);
                 }
             }
@@ -73,7 +73,7 @@ namespace Perpetuum.PathFinders
 
             while (node != null)
             {
-                stack.Push(node.Location);
+                stack.Push(new Point(node.X, node.Y));
                 OnPathFinderDebug(node,PathFinderNodeType.Path);
                 node = node.parent;
             }
@@ -83,17 +83,25 @@ namespace Perpetuum.PathFinders
 
         private static readonly sbyte[,] _n = { { -1, -1 }, { 0, -1 }, { 1, -1 }, { -1, 0 }, { 1, 0 }, { -1, 1 }, { 0, 1 }, { 1, 1 } };
 
-        private IEnumerable<Node> GetNeighbors(Node node)
+        private IEnumerable<Node> GetNeighbors(Node node, PathFinderNodePassableHandler handler, bool[] closed)
         {
             for (var i = 0; i < 8; i++)
             {
-                var nx = node.Location.X + _n[i, 0];
-                var ny = node.Location.Y + _n[i, 1];
+                var nx = node.X + _n[i, 0];
+                var ny = node.Y + _n[i, 1];
 
-                if (_passableHandler(nx, ny))
+                if (!handler(nx, ny))
                 {
-                    yield return new Node(nx,ny);
+                    continue;
                 }
+
+                if (closed[nx + ny * WIDTH])
+                {
+                    continue;
+                }
+                closed[nx + ny * WIDTH] = true;
+
+                yield return new Node(nx, ny);
             }
         }
 
