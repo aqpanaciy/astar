@@ -8,14 +8,18 @@ namespace Astar
 {
     internal class Program
     {
-        private const int WEIGHT = 128;
+#if DEBUG
+        private const int WIDTH  = 128;
         private const int HEIGHT = 128;
         private const int SHIFT  =  48;
         private const int AREA   =   2;
-#if DEBUG
         private const int ITER   =   1;
 #else
-        private const int ITER   = 100;
+        private const int WIDTH  = 2048;
+        private const int HEIGHT = 2048;
+        private const int SHIFT  = 1000;
+        private const int AREA   =    8;
+        private const int ITER   =  100;
 #endif
 
         private const double BLOCK = 0.55;
@@ -24,9 +28,9 @@ namespace Astar
 
         static void Main(string[] args)
         {
-            var random = new Random();
-            bool[,] blocks = new bool[WEIGHT, HEIGHT];
-            for (var x = 0; x < WEIGHT; x++)
+            var random = new Random(0);
+            bool[,] blocks = new bool[WIDTH, HEIGHT];
+            for (var x = 0; x < WIDTH; x++)
             {
                 for (var y = 0; y < HEIGHT; y++)
                 {
@@ -34,8 +38,8 @@ namespace Astar
                 }
             }
 
-            var start = new Point(WEIGHT / 2 - SHIFT, HEIGHT / 2 - SHIFT);
-            var end   = new Point(WEIGHT / 2 + SHIFT - 1, HEIGHT / 2 + SHIFT - 1);
+            var start = new Point(WIDTH / 2 - SHIFT, HEIGHT / 2 - SHIFT);
+            var end   = new Point(WIDTH / 2 + SHIFT - 1, HEIGHT / 2 + SHIFT - 1);
 
             for (var x = start.X - AREA; x <= start.X + AREA; x++)
             {
@@ -52,8 +56,19 @@ namespace Astar
                 }
             }
 
-            bmp = new Bitmap(WEIGHT, HEIGHT);
-            for (var x = 0; x < WEIGHT; x++)
+            for (var x = 0; x < WIDTH; x++)
+            {
+                blocks[x, 0] = false;
+                blocks[x, HEIGHT - 1] = false;
+            }
+            for (var y = 0; y < HEIGHT; y++)
+            {
+                blocks[0, y] = false;
+                blocks[WIDTH - 1, y] = false;
+            }
+
+            bmp = new Bitmap(WIDTH, HEIGHT);
+            for (var x = 0; x < WIDTH; x++)
             {
                 for (var y = 0; y < HEIGHT; y++)
                 {
@@ -68,25 +83,16 @@ namespace Astar
                 }
             }
 
-            var pathFinder = new AStarFinder(Heuristic.Manhattan, (x, y) =>
-            {
-                if (x < 0 || x >= WEIGHT || y < 0 || y >= HEIGHT)
-                {
-                    return false;
-                }
-
-                return blocks[x, y];
-            });
-            pathFinder.RegisterDebugHandler(Handler);
-
             Point[] path = new Point[0];
             var watch = Stopwatch.StartNew();
             for (var i = 0; i < ITER; i++)
             {
+                var pathFinder = new AStarFinder(Heuristic.Manhattan, (x, y) => blocks[x, y]);
+                pathFinder.RegisterDebugHandler(Handler);
                 path = pathFinder.FindPath(start, end);
             }
             watch.Stop();
-
+#if DEBUG
             if (path.Length > 0)
             {
                 for (var i = 0; i < path.Length; i++)
@@ -95,7 +101,8 @@ namespace Astar
                     bmp.Save($"./image_{_index++}.png", System.Drawing.Imaging.ImageFormat.Png);
                 }
             }
-
+#endif
+            bmp.Dispose();
 
             Console.WriteLine("Elapsed: " + watch.Elapsed.ToString());
             Console.ReadLine();
