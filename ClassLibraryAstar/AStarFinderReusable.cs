@@ -1,6 +1,4 @@
-﻿using System.Drawing;
-
-namespace ClassLibraryAstar
+﻿namespace ClassLibraryAstar
 {
     /// <summary>
     /// The class encapsulates the A* algorithm for pathfinding on a rectangular map.
@@ -40,15 +38,22 @@ namespace ClassLibraryAstar
         /// <summary>
         /// Array for path backtracking. Links a point to its parent.
         /// </summary>
-        private readonly int[] array = new int[HW * HW];
+        private readonly int[] _array = new int[HW * HW];
         /// <summary>
         /// stamp-technique by Claude.AI
         /// </summary>
-        private int currentStamp = 0;
+        private int _currentStamp = 0;
         /// <summary>
         /// A priority queue for selecting a new point for range analysis.
         /// </summary>
-        private readonly PriorityQueue<Node, int> list = new PriorityQueue<Node, int>(500);
+        private readonly PriorityQueue<Node, int> _list = new PriorityQueue<Node, int>(500);
+
+        private readonly Action<int, int>? _onNewPoint;
+
+        public AStarFinderReusable(Action<int, int>? onNewPoint = null)
+        {
+            _onNewPoint = onNewPoint;
+        }
 
         /// <summary>
         /// The main pathfinding procedure.
@@ -61,18 +66,18 @@ namespace ClassLibraryAstar
         /// <param name="passableHandler">Passability for each point on the map.</param>
         /// <param name="cancellationToken">Pathfinding cancellation token.</param>
         /// <returns></returns>
-        public Point[]? FindPath(int startX, int startY,
+        public Tuple<int, int>[]? FindPath(int startX, int startY,
             int endX, int endY,
             Heuristic heuristic,
             PathFinderNodePassableHandler passableHandler,
             CancellationToken cancellationToken)
         {
             // Input data validation.
-            if (startX < 0 || startX > HW-1 || startY < 0 || startY > HW-1 || (startX == 0 && startY == 0))
+            if (startX < 0 || startX >= HW || startY < 0 || startY >= HW || (startX == 0 && startY == 0))
             {
                 return null;
             }
-            if (endX < 0 || endX > HW - 1 || endY < 0 || endY > HW - 1 || (endX == 0 && endY == 0))
+            if (endX < 0 || endX >= HW || endY < 0 || endY >= HW || (endX == 0 && endY == 0))
             {
                 return null;
             }
@@ -86,57 +91,58 @@ namespace ClassLibraryAstar
             // If the start and end points coincide, we return an empty path.
             if (startX == endX && startY == endY)
             {
-                return Array.Empty<Point>();
+                return Array.Empty<Tuple<int, int>>();
             }
 
-            currentStamp++;
-            if (currentStamp >= 1024)
+            _currentStamp++;
+            if (_currentStamp >= 1024)
             {
-                currentStamp = 1;
+                _currentStamp = 1;
                 // We clear the array.
-                Array.Clear(array);
+                Array.Clear(_array);
             }
 
             // Start and end nodes.
             var endNode = new Node(endX, endY, 0);
             var startNode = new Node(startX, startY, 0);
             // We place the start of the path into the queue.
-            list.Enqueue(startNode, startNode.G + heuristic.Calculate(startNode.X, startNode.Y, endX, endY) * WEIGHT);
+            _list.Enqueue(startNode, startNode.G + heuristic.Calculate(startNode.X, startNode.Y, endX, endY) * WEIGHT);
             // The starting point is its own parent.
-            array[startNode.Hash] = (currentStamp << 22) | startNode.Hash;
+            _array[startNode.Hash] = (_currentStamp << 22) | startNode.Hash;
 
-            // We select from the queue the node with the minimum path cost from the start and the estimated remaining path cost.
             try
             {
-                while (list.TryDequeue(out Node node, out _) && !cancellationToken.IsCancellationRequested)
+                // We select from the queue the node with the minimum path cost from the start and the estimated remaining path cost.
+                while (_list.TryDequeue(out Node node, out _) && !cancellationToken.IsCancellationRequested)
                 {
                     // If we are at the end of the path, we conclude the search.
                     if (node.Hash == endNode.Hash)
                     {
-                        return Backtrace(node, array);
+                        return Backtrace(node, _array);
                     }
 
                     // For all neighboring nodes.
                     foreach (var neighbor in GetNeighbors(node, passableHandler))
                     {
-                        int stamp = (int)((uint)array[neighbor.Hash] >>> 22);
+                        int stamp = (int)((uint)_array[neighbor.Hash] >>> 22);
                         // If the neighboring node has a parent, it means we have already analyzed it.
-                        if (stamp == currentStamp)
+                        if (stamp == _currentStamp)
                         {
                             continue;
                         }
                         // We add a parent to the node.
-                        array[neighbor.Hash] = (currentStamp << 22) | node.Hash; ;
+                        _array[neighbor.Hash] = (_currentStamp << 22) | node.Hash;
+                        _onNewPoint?.Invoke(neighbor.X, neighbor.Y);
 
                         // We add this node to the queue with a weight equal to the path from the start plus the estimated path to the end.
-                        list.Enqueue(neighbor, neighbor.G + heuristic.Calculate(neighbor.X, neighbor.Y, endX, endY) * WEIGHT);
+                        _list.Enqueue(neighbor, neighbor.G + heuristic.Calculate(neighbor.X, neighbor.Y, endX, endY) * WEIGHT);
                     }
                 }
             }
             finally
             {
                 // We clear the queue.
-                list.Clear();
+                _list.Clear();
             }
 
             // Path not found.
@@ -149,10 +155,10 @@ namespace ClassLibraryAstar
         /// <param name="node">End node of the path.</param>
         /// <param name="array">An array in which nodes are connected from the start node to the end node.</param>
         /// <returns></returns>
-        private static Point[] Backtrace(Node node, int[] array)
+        private static Tuple<int, int>[] Backtrace(Node node, int[] array)
         {
             // Stack for placing nodes.
-            var stack = new Stack<Point>();
+            var stack = new Stack<Tuple<int, int>>();
             // End-node data.
             var x = node.X;
             var y = node.Y;
@@ -162,7 +168,7 @@ namespace ClassLibraryAstar
             while (parent != d)
             {
                 // We push the current node onto the stack.
-                stack.Push(new Point(x, y));
+                stack.Push(Tuple.Create(x, y));
                 // We take the parent node.
                 d = parent;
                 // Decoding the coordinates.
@@ -171,7 +177,7 @@ namespace ClassLibraryAstar
                 parent = array[d] & 0x3FFFFF;
             }
             // We place the start node onto the stack.
-            stack.Push(new Point(x, y));
+            stack.Push(Tuple.Create(x, y));
 
             // We convert the stack into an array, from the start node to the end node.
             return stack.ToArray();
